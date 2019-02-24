@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <style>
+        html, body { height: 100%; width: 100%; padding: 0; margin: 0; }
+        div { width: 100px; height: 100px; }
+        .border { border: 1px solid #efefef; }
+        .box0, .box1 { width: 100px; height: 100%; border-right: 1px solid #ccc; float: left; padding: 5px; position: relative;}
+        .box1 { width: 375px; position: relative; user-select: none;}
+        .box2 { width: 375px; height: 100%; float: left; padding: 100px 0;margin-left: 5%; box-sizing: border-box;}
+        #box2 { border: 1px solid #ccc; width: 100%; height: 700px; box-sizing: border-box;}
+        .drag-dom { position: absolute; }
+        .btn-box { display: inline-block; }
+        p { background: #f2f2f2; width: 50px; height: 50px; margin: 0;}
+        button { width: 80px; line-height: 30px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <div class="box0">
+        <button>text</button>
+        <button>icon</button>
+        <button>span</button>
+        <button>p</button>
+        <button>div</button>
+    </div>
+    <div class="box1"></div>
+    <div class="box2">
+        <div id="box2"></div>
+    </div>
+
+    <script src="./jq.min.js"></script>
+
+    <script>
+
+        function Drag(container, tag) {
+            this.tag = tag
+            this.defaultContainer = container
+            this.container = container // 容器
+            this.draging = false
+            this.dom = null   // 当前拖拽 dom
+            this.cloneDom = null
+            this.parentNode = null
+
+            this.interval = null
+            this.lastMove = null
+            this.domPosiNo = null
+
+            this.bindMouseUp = null
+            this.bindMouseMove = null
+        }
+        Drag.prototype.init = function() {
+            this.dom = this.render()
+            this.lockingDom()
+            return this.dom
+        }
+
+        Drag.prototype.render = function() {
+            var tag = this.tag
+            if(tag === 'text') {
+                return document.createTextNode(tag)
+            } else {
+                const dom = document.createElement(tag)
+                dom.setAttribute('class', 'vdom')
+                if(['span', 'i'].includes(tag)) {
+                    dom.innerHTML = '文字'
+                }
+                return dom
+            }
+        }
+        
+        Drag.prototype.lockingDom = function() {
+            const vm = this
+            this.dom.addEventListener('mousedown', function(ev) {
+                vm.draging = true
+                vm.cloneDom = vm.dom.cloneNode(true)
+                vm.disX = ev.clientX - vm.domDocumentOffSet(vm.dom).offsetLeft
+                vm.disY = ev.clientY - vm.domDocumentOffSet(vm.dom).offsetTop
+                vm.dom.parentNode.appendChild(vm.cloneDom)
+                vm.dom.style.position = "fixed"
+                vm.dom.style.zIndex = 2
+                vm.dom.style.userSelect = "none"
+                vm.dom.setAttribute('id', 'moving-dom')
+                
+                vm.movingDom()
+                vm.remove()
+            })
+        }
+
+        Drag.prototype.mousemove = function(ev) {
+            var ev = ev || event
+            this.dom.style.left = ev.clientX - this.disX + 'px'
+            this.dom.style.top = ev.clientY - this.disY + 'px'
+            this.lastMove = new Date().getTime()
+            if(this.domInsideViewArea(this.defaultContainer)) {
+                var vm = this
+                if(!this.interval && this.draging) {
+                    this.interval = setInterval(function() {
+                        var now = new Date().getTime()
+                        if(now - vm.lastMove > 2000) {
+                            clearInterval(this.interval)
+                            this.interval = null
+                        } else if(now - vm.lastMove > 400) {
+                            var childrens = vm.container.childNodes
+                            // 拖拽元素相对于，body 的距离
+                            var dragOddsetX = ev.clientX - vm.disX
+                            var dragOddsetY = ev.clientX - vm.disY
+                            
+                            vm.domPosiNo = Array.prototype.findIndex.call(childrens, function(el) {
+                                // 子元素相对于 body 的距离
+                                if(el == vm.dom) {
+                                    return false
+                                }
+                                var offsetLeft = vm.domDocumentOffSet(el).offsetLeft
+                                var offsetTop = vm.domDocumentOffSet(el).offsetTop
+                                return dragOddsetX < offsetLeft || dragOddsetY < offsetTop
+                            })
+                            if(vm.domPosiNo < 0) {
+                                vm.domPosiNo = null
+                            }
+                            console.log(vm.domPosiNo)
+                        }
+                    }, 400)
+                }
+            } else {
+                clearInterval(this.interval)
+                this.interval = null
+            }
+        }
+
+        Drag.prototype.mouseup = function() {
+            clearInterval(this.interval)
+            this.interval = null
+            this.draging = false
+            this.cloneDom && this.cloneDom.parentNode.removeChild(this.cloneDom)
+            this.cloneDom = null
+            if(this.dom) {
+                document.removeEventListener('mousemove', this.bindMouseMove)
+                document.removeEventListener('mouseup', this.bindMouseUp)
+                this.parentNode = this.dom.parentNode
+            }
+            
+            if(this.domInsideViewArea()) {
+                this.dom.removeAttribute('id')
+                this.dom.style.userSelect = "text"
+                this.insertDom()
+            } else {
+                this.parentNode && this.parentNode.removeChild(this.dom) 
+            }
+            this.domPosiNo = null
+        }
+
+        Drag.prototype.movingDom = function() {
+            this.bindMouseMove = this.mousemove.bind(this)
+            document.addEventListener('mousemove', this.bindMouseMove)
+        }
+
+        Drag.prototype.remove = function() {
+            this.bindMouseUp = this.mouseup.bind(this)
+            document.addEventListener('mouseup', this.bindMouseUp)
+        }
+
+        Drag.prototype.domInsideViewArea = function(container) {
+            var dom = this.dom 
+            var container = container || this.container
+
+            var containArea = this.viewArea(container)
+            var sonArea = this.viewArea(dom)
+    
+            if(
+                sonArea.lt[0] > containArea.lt[0] && 
+                sonArea.lt[1] > containArea.lt[1] &&
+                sonArea.rt[0] < containArea.rt[0] + dom.offsetWidth/2 && 
+                sonArea.lt[1] < containArea.lb[1]
+            ) {
+                return true 
+            }
+            return false
+        }
+    
+        Drag.prototype.viewArea = function(dom) {
+            lt = [dom.offsetLeft, dom.offsetTop]
+            lb = [dom.offsetLeft, dom.offsetTop + dom.offsetHeight]
+            rt = [dom.offsetLeft + dom.offsetWidth, dom.offsetTop]
+            rb = [dom.offsetLeft + dom.offsetWidth, dom.offsetTop + dom.offsetHeight]
+            return {lt, lb, rt, rb}
+        }
+
+        Drag.prototype.insertDom = function() {
+            var dom = this.dom 
+            var container = this.container 
+            var domPosiNo = this.domPosiNo
+            dom.removeAttribute('id')
+            if(domPosiNo === null || domPosiNo < 0) {
+                dom.style.position = 'static'
+                dom.style.left = 'auto'
+                dom.style.top = 'auto'
+                container.appendChild(dom)
+            }
+        }
+    
+        Drag.prototype.domDocumentOffSet = function(dom) {
+            var vm = this 
+            var offsetTop = dom.offsetTop
+            var offsetLeft = dom.offsetLeft 
+
+            if(dom.offsetParent && dom.offsetParent.tagName.toLowerCase() === 'body') {
+                return {
+                    offsetTop: offsetTop,
+                    offsetLeft: offsetLeft
+                }
+            }
+            
+            var parentNode = dom.parentNode
+            var offset = vm.domDocumentOffSet(parentNode)
+        
+            offsetTop += offset.offsetTop
+            offsetLeft += offset.offsetLeft
+            
+            return { 
+                offsetTop: offsetTop,
+                offsetLeft: offsetLeft
+            }
+        }
+
+    </script>
+
+    <script>
+        var button = $('button')
+        button.on('click', function(ev) {
+            var text = this.innerHTML
+            var box2 = document.getElementById('box2')
+            var drag = new Drag(box2, text)
+            var el = drag.init()
+            document.getElementsByClassName('box1')[0].appendChild(el)
+        })
+        
+    </script>
+
+</body>
+</html>
