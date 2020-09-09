@@ -1,6 +1,9 @@
 const path = require('path');
 module.exports = {
-    entry: path.resolve('', 'lib/engine.js'),
+    entry: {
+        engine: path.resolve('', 'lib/engine.js'),
+        container: path.resolve('', 'lib/container.js')
+    },
     module: {
         rules: [
             {
@@ -10,7 +13,6 @@ module.exports = {
         ]
     },
     output: {
-      path: path.resolve(__dirname, 'dist'),
-      filename: 'bundle.js'
+      path: path.resolve(__dirname, 'dist')
     },
 };
