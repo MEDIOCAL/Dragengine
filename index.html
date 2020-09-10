@@ -59,6 +59,7 @@
     <div id="box" class="box"></div>
     <script src="./dist/engine.js"></script>
     <script src="./dist/container.js"></script>
+    <script src="./dist/controller.js"></script>
     <script>
         const box = document.getElementById('box');
         function Init() {
@@ -93,7 +94,7 @@
 
         const sel = document.getElementById('sel');
         engine.from(sel, (e) => {
-            return {};
+            return new Node();
         });
         
         const $container = document.getElementById('container');
@@ -103,7 +104,7 @@
                 new Container({
                     ele: document.getElementById('container2')
                 })
-            ]
+            ],
         });
     </script>
 </body>
